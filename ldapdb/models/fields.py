@@ -7,6 +7,9 @@ import re
 
 from django.db.models import fields, lookups
 from django.utils import timezone
+from pytz import utc
+
+timezone.utc = utc
 
 
 class LdapLookup(lookups.Lookup):
@@ -226,7 +229,6 @@ BooleanField.register_lookup(ExactLookup)
 
 
 class ListField(LdapFieldMixin, fields.Field):
-
     multi_valued_field = True
 
     def from_ldap(self, value, connection):
@@ -286,7 +288,6 @@ class DateField(LdapFieldMixin, fields.DateField):
 
 DateField.register_lookup(ExactLookup)
 
-
 LDAP_DATETIME_RE = re.compile(
     r'(?P<year>\d{4})'
     r'(?P<month>\d{2})'
@@ -298,7 +299,6 @@ LDAP_DATETIME_RE = re.compile(
     r'(?P<tzinfo>Z|[+-]\d{2}(?:\d{2})?)'
     r'$'
 )
-
 
 LDAP_DATE_FORMAT = '%Y%m%d%H%M%S.%fZ'
 
@@ -363,7 +363,6 @@ DateTimeField.register_lookup(LteLookup)
 DateTimeField.register_lookup(GteLookup)
 DateTimeField.register_lookup(InLookup)
 
-
 EPOCH = timezone.utc.localize(datetime.datetime.utcfromtimestamp(0))
 
 
@@ -395,3 +394,24 @@ TimestampField.register_lookup(ExactLookup)
 TimestampField.register_lookup(LteLookup)
 TimestampField.register_lookup(GteLookup)
 TimestampField.register_lookup(InLookup)
+
+
+class PasswordField(CharField):
+    """
+    Field which encodes password like slappasswd
+    """
+
+    def __init__(self, *args, db_collation=None, **kwargs):
+        defaults = {
+            'blank': True,
+            'db_column': 'userPassword',
+            'max_length': 128
+        }
+        defaults.update(kwargs)
+        super(PasswordField, self).__init__(*args, db_collation, **defaults)
+
+    def get_db_prep_save(self, value, connection):
+        return super(PasswordField, self).get_db_prep_save(
+            '{SSHA}' + value,
+            connection
+        )
